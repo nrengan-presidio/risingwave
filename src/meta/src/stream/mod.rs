@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod scale;
+mod scale_v2;
 mod sink;
 mod source_manager;
 mod stream_graph;
