@@ -44,7 +44,7 @@ pub struct AvroAccessBuilder {
 
 impl AccessBuilder for AvroAccessBuilder {
     async fn generate_accessor(&mut self, payload: Vec<u8>) -> ConnectorResult<AccessImpl<'_>> {
-        self.value = self.parse_avro_value(&payload).await?;
+        self.value = Some(self.parse_avro_value(&payload).await?);
         Ok(AccessImpl::Avro(AvroAccess::new(
             self.value.as_ref().unwrap(),
             AvroParseOptions::create(&self.schema.resolved_schema),
@@ -58,7 +58,7 @@ impl AvroAccessBuilder {
             schema,
             key_schema,
             writer_schema_cache,
-            ..
+            map_handling: _,
         } = config;
         Ok(Self {
             schema: match encoding_type {
@@ -72,21 +72,21 @@ impl AvroAccessBuilder {
 
     /// Note: we should use unresolved schema to parsing bytes into avro value.
     /// Otherwise it's an invalid schema and parsing will fail. (Avro error: Two named schema defined for same fullname)
-    async fn parse_avro_value(&self, payload: &[u8]) -> ConnectorResult<Option<Value>> {
+    async fn parse_avro_value(&self, payload: &[u8]) -> ConnectorResult<Value> {
         // parse payload to avro value
         // if use confluent schema, get writer schema from confluent schema registry
         if let Some(resolver) = &self.writer_schema_cache {
             let (schema_id, mut raw_payload) = extract_schema_id(payload)?;
             let writer_schema = resolver.get_by_id(schema_id).await?;
-            Ok(Some(from_avro_datum(
+            Ok(from_avro_datum(
                 writer_schema.as_ref(),
                 &mut raw_payload,
                 Some(&self.schema.original_schema),
-            )?))
+            )?)
         } else {
             let mut reader = Reader::with_schema(&self.schema.original_schema, payload)?;
             match reader.next() {
-                Some(Ok(v)) => Ok(Some(v)),
+                Some(Ok(v)) => Ok(v),
                 Some(Err(e)) => Err(e)?,
                 None => bail!("avro parse unexpected eof"),
             }
