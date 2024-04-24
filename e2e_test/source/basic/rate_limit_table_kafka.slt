@@ -31,7 +31,7 @@ skipif in-memory
 sleep 3s
 
 statement ok
-create source kafka_source (v1 int) with (
+create table kafka_source (v1 int) with (
   connector = 'kafka',
   topic = 'rate_limit_source_kafka_0',
   properties.bootstrap.server = 'localhost:29092',
@@ -47,58 +47,29 @@ flush;
 skipif in-memory
 sleep 3s
 
-############## Create MV on source
+############## Table should have 0 records, since source has (rate_limit = 0)
+
+query I
+select * from kafka_source;
+----
+
+############## Should still be able to insert
 
 statement ok
-create materialized view mv1 as select count(*) from kafka_source;
-
-# Demonstrate that mv2's source read still depends on the rate_limit of the source.
-
-statement ok
-SET STREAMING_RATE_LIMIT=default;
-
-statement ok
-create materialized view mv2 as select count(*) from kafka_source;
-
-statement ok
-SET STREAMING_RATE_LIMIT=0;
-
-statement ok
-create materialized view mv3 as select count(*) from kafka_source;
-
-############## MVs should have 0 records, since source has (rate_limit = 0)
+insert into kafka_source values(1);
 
 statement ok
 flush;
 
 query I
-select * from mv1;
+select * from kafka_source;
 ----
-0
-
-query I
-select * from mv2;
-----
-0
-
-query I
-select * from mv3;
-----
-0
+1
 
 ############## Cleanup
 
 statement ok
-drop materialized view mv1;
-
-statement ok
-drop materialized view mv2;
-
-statement ok
-drop materialized view mv3;
-
-statement ok
-drop source kafka_source;
+drop table kafka_source;
 
 statement ok
 drop sink kafka_sink;
