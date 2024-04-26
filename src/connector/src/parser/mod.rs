@@ -1066,16 +1066,36 @@ impl SpecificParserConfig {
 
 #[derive(Debug, Default, Clone)]
 pub struct AvroProperties {
-    pub use_schema_registry: bool,
+    pub header_props: AvroHeaderProps,
     pub row_schema_location: String,
-    pub client_config: SchemaRegistryAuth,
-    pub aws_auth_props: Option<AwsAuthProps>,
     pub topic: String,
     pub enable_upsert: bool,
     pub record_name: Option<String>,
     pub key_record_name: Option<String>,
-    pub name_strategy: PbSchemaRegistryNameStrategy,
     pub map_handling: Option<MapHandling>,
+}
+
+#[derive(Debug, Clone)]
+pub enum AvroHeaderProps {
+    File {
+        // for s3
+        aws_auth_props: Option<AwsAuthProps>,
+    },
+    Confluent {
+        client_config: SchemaRegistryAuth,
+        name_strategy: PbSchemaRegistryNameStrategy,
+    },
+    Glue {
+        aws_auth_props: Option<AwsAuthProps>,
+    },
+}
+impl Default for AvroHeaderProps {
+    fn default() -> Self {
+        // backward compatible but undesired
+        Self::File {
+            aws_auth_props: None,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -1178,9 +1198,6 @@ impl SpecificParserConfig {
                         Some(info.proto_message_name.clone())
                     },
                     key_record_name: info.key_message_name.clone(),
-                    name_strategy: PbSchemaRegistryNameStrategy::try_from(info.name_strategy)
-                        .unwrap(),
-                    use_schema_registry: info.use_schema_registry,
                     row_schema_location: info.row_schema_location.clone(),
                     map_handling: MapHandling::from_options(&info.format_encode_options)?,
                     ..Default::default()
@@ -1190,14 +1207,20 @@ impl SpecificParserConfig {
                 }
                 if info.use_schema_registry {
                     config.topic.clone_from(get_kafka_topic(with_properties)?);
-                    config.client_config = SchemaRegistryAuth::from(&info.format_encode_options);
+                    config.header_props = AvroHeaderProps::Confluent {
+                        client_config: SchemaRegistryAuth::from(&info.format_encode_options),
+                        name_strategy: PbSchemaRegistryNameStrategy::try_from(info.name_strategy)
+                            .unwrap(),
+                    };
                 } else {
-                    config.aws_auth_props = Some(
-                        serde_json::from_value::<AwsAuthProps>(
-                            serde_json::to_value(info.format_encode_options.clone()).unwrap(),
-                        )
-                        .map_err(|e| anyhow::anyhow!(e))?,
-                    );
+                    config.header_props = AvroHeaderProps::File {
+                        aws_auth_props: Some(
+                            serde_json::from_value::<AwsAuthProps>(
+                                serde_json::to_value(info.format_encode_options.clone()).unwrap(),
+                            )
+                            .map_err(|e| anyhow::anyhow!(e))?,
+                        ),
+                    };
                 }
                 EncodingProperties::Avro(config)
             }
@@ -1238,12 +1261,14 @@ impl SpecificParserConfig {
                     } else {
                         Some(info.proto_message_name.clone())
                     },
-                    name_strategy: PbSchemaRegistryNameStrategy::try_from(info.name_strategy)
-                        .unwrap(),
                     key_record_name: info.key_message_name.clone(),
                     row_schema_location: info.row_schema_location.clone(),
                     topic: get_kafka_topic(with_properties).unwrap().clone(),
-                    client_config: SchemaRegistryAuth::from(&info.format_encode_options),
+                    header_props: AvroHeaderProps::Confluent {
+                        client_config: SchemaRegistryAuth::from(&info.format_encode_options),
+                        name_strategy: PbSchemaRegistryNameStrategy::try_from(info.name_strategy)
+                            .unwrap(),
+                    },
                     ..Default::default()
                 })
             }
