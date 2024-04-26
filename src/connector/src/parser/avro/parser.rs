@@ -24,6 +24,7 @@ use risingwave_connector_codec::decoder::avro::{
 };
 use risingwave_pb::plan_common::ColumnDesc;
 
+use super::glue_resolver::GlueSchemaResolver;
 use super::ConfluentSchemaCache;
 use crate::error::ConnectorResult;
 use crate::parser::unified::AccessImpl;
@@ -95,6 +96,22 @@ impl AvroAccessBuilder {
                     None => bail!("avro parse unexpected eof"),
                 }
             }
+            AvroHeader::Glue(resolver) => {
+                assert!(payload.len() >= 18);
+                // let header_version = payload[0];
+                // let compression = payload[1];
+                let schema_version_id = uuid::Uuid::from_slice(&payload[2..18]).unwrap();
+                // eprintln!(">>>> {schema_version_id}");
+                let writer_schema = resolver.get(schema_version_id).await?;
+                let mut raw_payload = &payload[18..];
+                let rr = from_avro_datum(
+                    writer_schema.as_ref(),
+                    &mut raw_payload,
+                    Some(&self.schema.original_schema),
+                )?;
+                // eprintln!("{rr:#?}");
+                Ok(rr)
+            }
         }
     }
 }
@@ -113,7 +130,7 @@ pub struct AvroParserConfig {
 #[derive(Debug, Clone)]
 enum AvroHeader {
     Confluent(Arc<ConfluentSchemaCache>),
-    // Glue(...)
+    Glue(Arc<GlueSchemaResolver>),
     File,
     // SingleObject,
     // Fixed & None,
@@ -190,7 +207,23 @@ impl AvroParserConfig {
                     map_handling,
                 })
             }
-            AvroHeaderProps::Glue { aws_auth_props: _ } => unreachable!(),
+            AvroHeaderProps::Glue { aws_auth_props } => {
+                let client = aws_sdk_glue::Client::new(&aws_auth_props.build_config().await?);
+                let resolver = GlueSchemaResolver::new(client);
+                if enable_upsert {
+                    bail!("avro upsert without schema registry is not supported");
+                }
+                let url = url.first().unwrap();
+                let schema_content = bytes_from_url(url, None).await?;
+                let schema = Schema::parse_reader(&mut schema_content.as_slice())
+                    .context("failed to parse avro schema")?;
+                Ok(Self {
+                    schema: Arc::new(ResolvedAvroSchema::create(Arc::new(schema))?),
+                    key_schema: None,
+                    writer_schema_cache: AvroHeader::Glue(Arc::new(resolver)),
+                    map_handling,
+                })
+            }
         }
     }
 
