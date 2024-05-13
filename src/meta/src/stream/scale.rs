@@ -2074,12 +2074,16 @@ impl ScaleController {
 
                 for (fragment_id, downstreams) in fragment_downstreams {
                     for (downstream_fragment_id, dispatcher_type) in downstreams {
+                        println!("fragment_id {} downstream {} dispatcher {:?}", fragment_id, downstream_fragment_id, dispatcher_type);
                         if let risingwave_meta_model_v2::actor_dispatcher::DispatcherType::NoShuffle = dispatcher_type {
                             no_shuffle_source_fragment_ids.insert(fragment_id as FragmentId);
                             no_shuffle_target_fragment_ids.insert(downstream_fragment_id as FragmentId);
                         }
                     }
                 }
+
+                println!("no shuffle src {:?}", no_shuffle_source_fragment_ids);
+                println!("no shuffle dst {:?}", no_shuffle_target_fragment_ids);
 
                 for (fragment_id, fragment) in fragments {
                     fragment_distribution_map.insert(
@@ -2092,6 +2096,9 @@ impl ScaleController {
                         .or_default()
                         .insert(fragment_id as FragmentId);
                 }
+
+                println!("frag dist map {:#?}", fragment_distribution_map);
+                println!("table frag id map {:?}", table_fragment_id_map);
 
                 for (actor_id, actor) in actors {
                     actor_status.insert(
@@ -2109,6 +2116,9 @@ impl ScaleController {
                         .or_default()
                         .insert(actor_id as ActorId);
                 }
+
+                println!("actor status {:#?}", actor_status);
+                println!("frag actor {:#?}", fragment_actor_id_map);
             }
         }
 
@@ -2227,6 +2237,8 @@ impl ScaleController {
         target_plan.retain(|_, plan| {
             !(plan.added_parallel_units.is_empty() && plan.removed_parallel_units.is_empty())
         });
+
+        println!("target plan {:#?}", target_plan);
 
         Ok(target_plan)
     }

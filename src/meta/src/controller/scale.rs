@@ -23,8 +23,8 @@ use risingwave_meta_model_v2::actor_dispatcher::DispatcherType;
 use risingwave_meta_model_v2::prelude::{Actor, ActorDispatcher, Fragment};
 use risingwave_meta_model_v2::{actor, actor_dispatcher, fragment, ActorId, FragmentId, ObjectId};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, JoinType, QueryFilter, QuerySelect,
-    QueryTrait, RelationTrait, Statement, TransactionTrait,
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DbErr, EntityTrait, JoinType, QueryFilter,
+    QuerySelect, QueryTrait, RelationTrait, Statement, TransactionTrait,
 };
 
 use crate::controller::catalog::CatalogController;
@@ -247,7 +247,7 @@ impl CatalogController {
         // single-layer downstream fragment ids
         let downstream_fragments: Vec<(FragmentId, DispatcherType, FragmentId)> = Actor::find()
             .select_only()
-            .column(actor_dispatcher::Column::DispatcherId)
+            .column(actor::Column::FragmentId)
             .column(actor_dispatcher::Column::DispatcherType)
             .column(actor_dispatcher::Column::DispatcherId)
             .distinct()
