@@ -30,7 +30,6 @@ use risingwave_common::buffer::{Bitmap, BitmapBuilder};
 use risingwave_common::catalog::TableId;
 use risingwave_common::hash::{ActorMapping, ParallelUnitId, VirtualNode};
 use risingwave_common::util::iter_util::ZipEqDebug;
-use risingwave_common::util::value_encoding::DatumToProtoExt;
 use risingwave_meta_model_v2::{actor, fragment, ObjectId, StreamingParallelism};
 use risingwave_pb::common::{
     ActorInfo, Buffer, ParallelUnit, ParallelUnitMapping, PbParallelUnit, WorkerNode, WorkerType,
@@ -2074,7 +2073,10 @@ impl ScaleController {
 
                 for (fragment_id, downstreams) in fragment_downstreams {
                     for (downstream_fragment_id, dispatcher_type) in downstreams {
-                        println!("fragment_id {} downstream {} dispatcher {:?}", fragment_id, downstream_fragment_id, dispatcher_type);
+                        println!(
+                            "fragment_id {} downstream {} dispatcher {:?}",
+                            fragment_id, downstream_fragment_id, dispatcher_type
+                        );
                         if let risingwave_meta_model_v2::actor_dispatcher::DispatcherType::NoShuffle = dispatcher_type {
                             no_shuffle_source_fragment_ids.insert(fragment_id as FragmentId);
                             no_shuffle_target_fragment_ids.insert(downstream_fragment_id as FragmentId);

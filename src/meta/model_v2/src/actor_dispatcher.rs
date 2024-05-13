@@ -20,7 +20,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ActorId, ActorMapping, FragmentId, I32Array};
 
-#[derive(Hash, Copy, Clone, Debug, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[derive(
+    Hash, Copy, Clone, Debug, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize,
+)]
 #[sea_orm(rs_type = "String", db_type = "String(None)")]
 pub enum DispatcherType {
     #[sea_orm(string_value = "HASH")]

@@ -23,7 +23,7 @@ use risingwave_meta_model_v2::actor_dispatcher::DispatcherType;
 use risingwave_meta_model_v2::prelude::{Actor, ActorDispatcher, Fragment};
 use risingwave_meta_model_v2::{actor, actor_dispatcher, fragment, ActorId, FragmentId, ObjectId};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseBackend, DbErr, EntityTrait, JoinType, QueryFilter,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, JoinType, QueryFilter,
     QuerySelect, QueryTrait, RelationTrait, Statement, TransactionTrait,
 };
 
@@ -231,28 +231,34 @@ impl CatalogController {
         )
         .await?;
 
-        // single-layer upstream fragment ids
-        let upstream_fragments: Vec<(FragmentId, DispatcherType, FragmentId)> = Actor::find()
+        // We need to identify all other types of dispatchers that are Leaves in the NO_SHUFFLE dependency tree.
+        let extended_fragment_ids: HashSet<_> = no_shuffle_related_upstream_fragment_ids
+            .iter()
+            .chain(no_shuffle_related_downstream_fragment_ids.iter())
+            .flat_map(|(src, _, dst)| [*src, *dst])
+            .chain(fragment_ids.iter().cloned())
+            .collect();
+
+        let query = Actor::find()
             .select_only()
             .column(actor::Column::FragmentId)
             .column(actor_dispatcher::Column::DispatcherType)
             .column(actor_dispatcher::Column::DispatcherId)
             .distinct()
-            .join(JoinType::InnerJoin, actor::Relation::ActorDispatcher.def())
-            .filter(actor_dispatcher::Column::DispatcherId.is_in(fragment_ids.clone()))
+            .join(JoinType::InnerJoin, actor::Relation::ActorDispatcher.def());
+
+        // single-layer upstream fragment ids
+        let upstream_fragments: Vec<(FragmentId, DispatcherType, FragmentId)> = query
+            .clone()
+            .filter(actor_dispatcher::Column::DispatcherId.is_in(extended_fragment_ids.clone()))
             .into_tuple()
             .all(txn)
             .await?;
 
         // single-layer downstream fragment ids
-        let downstream_fragments: Vec<(FragmentId, DispatcherType, FragmentId)> = Actor::find()
-            .select_only()
-            .column(actor::Column::FragmentId)
-            .column(actor_dispatcher::Column::DispatcherType)
-            .column(actor_dispatcher::Column::DispatcherId)
-            .distinct()
-            .join(JoinType::InnerJoin, actor::Relation::ActorDispatcher.def())
-            .filter(actor::Column::FragmentId.is_in(fragment_ids.clone()))
+        let downstream_fragments: Vec<(FragmentId, DispatcherType, FragmentId)> = query
+            .clone()
+            .filter(actor::Column::FragmentId.is_in(extended_fragment_ids.clone()))
             .into_tuple()
             .all(txn)
             .await?;
@@ -283,7 +289,7 @@ impl CatalogController {
         let all_fragment_ids: HashSet<_> = all_fragment_relations
             .iter()
             .flat_map(|(src, _, dst)| [*src, *dst])
-            .chain(fragment_ids.clone().into_iter())
+            .chain(extended_fragment_ids.into_iter())
             .collect();
 
         let fragments: Vec<_> = Fragment::find()
