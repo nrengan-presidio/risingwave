@@ -1130,6 +1130,10 @@ impl DdlController {
 
         assert_eq!(table_catalog.incoming_sinks, table.incoming_sinks);
 
+        println!("in {:?}", table_catalog.incoming_sinks);
+
+        println!("drop {:?}", dropping_sink_id);
+
         {
             for sink_id in &table_catalog.incoming_sinks {
                 if let Some(dropping_sink_id) = dropping_sink_id
@@ -1137,6 +1141,8 @@ impl DdlController {
                 {
                     continue;
                 };
+
+                println!("??????1");
 
                 let sink_table_fragments = mgr
                     .get_job_fragments_by_id(&risingwave_common::catalog::TableId::new(*sink_id))
@@ -1154,6 +1160,8 @@ impl DdlController {
                 );
             }
         }
+
+        println!("??????2222");
 
         // check if the union fragment is fully assigned.
         for fragment in table_fragments.fragments.values_mut() {
@@ -1252,6 +1260,8 @@ impl DdlController {
         let upstream_fragment_id = sink_fragment.fragment_id;
 
         for actor in &mut union_fragment.actors {
+            println!("actor {:#?}", actor.actor_id);
+
             if let Some(node) = &mut actor.nodes {
                 // let fields = node.fields.clone();
                 let fields = sink_fields.clone();
@@ -1515,14 +1525,20 @@ impl DdlController {
                     )
                     .await?;
 
+                println!("111111");
+
                 // Add table fragments to meta store with state: `State::Initial`.
                 mgr.fragment_manager
                     .start_create_table_fragments(table_fragments.clone())
                     .await?;
 
+                println!("222222");
+
                 self.stream_manager
                     .replace_table(table_fragments, context)
                     .await?;
+
+                println!("333333");
             };
 
             match result {
@@ -1886,7 +1902,7 @@ impl DdlController {
             .await? as u32;
 
         let result: MetaResult<()> = try {
-            let (ctx, table_fragments) = self
+            let (mut ctx, mut table_fragments) = self
                 .build_replace_table(
                     stream_ctx,
                     &stream_job,
@@ -1895,6 +1911,59 @@ impl DdlController {
                     dummy_id,
                 )
                 .await?;
+
+            println!("222222222222");
+
+            let StreamingJob::Table(_, table, _) = &stream_job else {
+                unreachable!("unexpected job: {stream_job:?}");
+            };
+
+            let mut union_fragment_id = None;
+
+            for (fragment_id, fragment) in &mut table_fragments.fragments {
+                for actor in &mut fragment.actors {
+                    if let Some(node) = &mut actor.nodes {
+                        visit_stream_node(node, |body| {
+                            if let NodeBody::Union(_) = body {
+                                if let Some(union_fragment_id) = union_fragment_id.as_mut() {
+                                    // The union fragment should be unique.
+                                    assert_eq!(*union_fragment_id, *fragment_id);
+                                } else {
+                                    union_fragment_id = Some(*fragment_id);
+                                }
+                            }
+                        })
+                    };
+                }
+            }
+
+            let target_fragment_id =
+                union_fragment_id.expect("fragment of placeholder merger not found");
+
+            println!("incoming sinks {:#?}", table.incoming_sinks);
+
+            for sink_id in &table.incoming_sinks {
+                let sink_table_fragments = self
+                    .metadata_manager
+                    .get_job_fragments_by_id(&risingwave_common::catalog::TableId::new(*sink_id))
+                    .await?;
+
+                let sink_fragment = sink_table_fragments.sink_fragment().unwrap();
+
+                println!(
+                    "sink frag id {}, target frag {}",
+                    sink_fragment.fragment_id, target_fragment_id
+                );
+
+                Self::inject_replace_table_plan_for_sink(
+                    Some(*sink_id),
+                    &sink_fragment,
+                    table,
+                    &mut ctx,
+                    &mut table_fragments,
+                    target_fragment_id,
+                );
+            }
 
             // Add table fragments to meta store with state: `State::Initial`.
             mgr.fragment_manager
@@ -2043,12 +2112,6 @@ impl DdlController {
             old_table_fragments.assigned_parallelism,
         );
 
-        println!("222222222222");
-
-        let StreamingJob::Table(_, table, _) = stream_job else {
-            unreachable!("unexpected job: {stream_job:?}");
-        };
-
         let mut ctx = ReplaceTableContext {
             old_table_fragments,
             merge_updates,
@@ -2056,53 +2119,6 @@ impl DdlController {
             building_locations,
             existing_locations,
         };
-
-        let mut union_fragment_id = None;
-
-        for (fragment_id, fragment) in &mut table_fragments.fragments {
-            for actor in &mut fragment.actors {
-                if let Some(node) = &mut actor.nodes {
-                    visit_stream_node(node, |body| {
-                        if let NodeBody::Union(_) = body {
-                            if let Some(union_fragment_id) = union_fragment_id.as_mut() {
-                                // The union fragment should be unique.
-                                assert_eq!(*union_fragment_id, *fragment_id);
-                            } else {
-                                union_fragment_id = Some(*fragment_id);
-                            }
-                        }
-                    })
-                };
-            }
-        }
-
-        let target_fragment_id =
-            union_fragment_id.expect("fragment of placeholder merger not found");
-
-        println!("incoming sinks {:#?}", table.incoming_sinks);
-
-        for sink_id in &table.incoming_sinks {
-            let sink_table_fragments = self
-                .metadata_manager
-                .get_job_fragments_by_id(&risingwave_common::catalog::TableId::new(*sink_id))
-                .await?;
-
-            let sink_fragment = sink_table_fragments.sink_fragment().unwrap();
-
-            println!(
-                "sink frag id {}, target frag {}",
-                sink_fragment.fragment_id, target_fragment_id
-            );
-
-            Self::inject_replace_table_plan_for_sink(
-                Some(*sink_id),
-                &sink_fragment,
-                table,
-                &mut ctx,
-                &mut table_fragments,
-                target_fragment_id,
-            );
-        }
 
         Ok((ctx, table_fragments))
     }
