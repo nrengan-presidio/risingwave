@@ -109,6 +109,10 @@ pub trait WithPropertiesExt: Get + Sized {
         self.is_cdc_connector() && CdcTableType::from_properties(self).can_backfill()
     }
 
+    fn enable_transaction_metadata(&self) -> bool {
+        CdcTableType::from_properties(self).enable_transaction_metadata()
+    }
+
     #[inline(always)]
     fn is_iceberg_connector(&self) -> bool {
         let Some(connector) = self.get_connector() else {
