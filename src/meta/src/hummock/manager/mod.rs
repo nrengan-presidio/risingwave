@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
@@ -61,6 +61,7 @@ pub(crate) mod checkpoint;
 mod commit_epoch;
 mod compaction;
 pub mod sequence;
+mod time_travel;
 mod timer_task;
 mod transaction;
 mod utils;
@@ -113,6 +114,7 @@ pub struct HummockManager {
     // `compaction_state` will record the types of compact tasks that can be triggered in `hummock`
     // and suggest types with a certain priority.
     pub compaction_state: CompactionState,
+    time_travel_snapshot_interval_counter: AtomicU64,
 }
 
 pub type HummockManagerRef = Arc<HummockManager>;
@@ -286,6 +288,7 @@ impl HummockManager {
             history_table_throughput: parking_lot::RwLock::new(HashMap::default()),
             compactor_streams_change_tx,
             compaction_state: CompactionState::new(),
+            time_travel_snapshot_interval_counter: AtomicU64::new(u64::MAX - 1),
         };
         let instance = Arc::new(instance);
         instance.start_worker(rx).await;
@@ -463,8 +466,8 @@ impl HummockManager {
         };
 
         self.delete_object_tracker.clear();
-        // Not delete stale objects when archive is enabled
-        if !self.env.opts.enable_hummock_data_archive {
+        // Not delete stale objects when archive or time travel is enabled
+        if !self.env.opts.enable_hummock_data_archive && !self.env.opts.enable_hummock_time_travel {
             versioning_guard.mark_objects_for_deletion(context_info, &self.delete_object_tracker);
         }
 
