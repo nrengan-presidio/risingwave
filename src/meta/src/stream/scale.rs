@@ -867,7 +867,10 @@ impl ScaleController {
         Ok(())
     }
 
-    // Results are the generated reschedule plan and the changes that need to be updated to the meta store.
+    /// Results are the generated reschedule plan and the changes that need to be updated to the meta store.
+    ///
+    /// XXX: Why this is also used in recovery?
+    /// Should other modules use only `reschedule_actors_impl`, but not this internal method?
     pub(crate) async fn prepare_reschedule_command(
         &self,
         mut reschedules: HashMap<FragmentId, ParallelUnitReschedule>,
@@ -2667,8 +2670,8 @@ impl ScaleController {
     }
 }
 
-// At present, for table level scaling, we use the strategy TableResizePolicy.
-// Currently, this is used as an internal interface, so it won’t be included in Protobuf for the time being.
+/// At present, for table level scaling, we use the strategy TableResizePolicy.
+/// Currently, this is used as an internal interface, so it won’t be included in Protobuf for the time being.
 pub struct TableResizePolicy {
     pub(crate) worker_ids: BTreeSet<WorkerId>,
     pub(crate) table_parallelisms: HashMap<u32, TableParallelism>,
@@ -2683,6 +2686,11 @@ impl GlobalStreamManager {
         self.scale_controller.reschedule_lock.write().await
     }
 
+    /// The entrypoint of rescheduling actors.
+    ///
+    /// Used by:
+    /// - `risectl scale` (`risingwave_meta_service::scale_service::ScaleService`)
+    /// - `ALTER [TABLE | INDEX | MATERIALIZED VIEW | SINK] SET PARALLELISM`
     pub async fn reschedule_actors(
         &self,
         reschedules: HashMap<FragmentId, ParallelUnitReschedule>,
@@ -2775,6 +2783,14 @@ impl GlobalStreamManager {
         Ok(())
     }
 
+    /// When new worker nodes joined, or the parallelism of existing worker nodes changed,
+    /// examines if there are any jobs can be scaled, and scales them if found.
+    ///
+    /// This method will iterate over all `CREATED` jobs, and can be repeatedly called.
+    ///
+    /// Returns
+    /// - `Ok(false)` if no jobs can be scaled;
+    /// - `Ok(true)` if some jobs are scaled, and it is possible that there are more jobs can be scaled.
     async fn trigger_parallelism_control(&self) -> MetaResult<bool> {
         let background_streaming_jobs = self
             .metadata_manager
@@ -2896,7 +2912,9 @@ impl GlobalStreamManager {
 
         for batch in batches {
             let parallelisms: HashMap<_, _> = batch.into_iter().collect();
-
+            // `table_parallelisms` contains ALL created jobs.
+            // We rely on `generate_table_resize_plan` to check if there are
+            // any jobs that can be scaled.
             let plan = self
                 .scale_controller
                 .generate_table_resize_plan(TableResizePolicy {
@@ -2933,6 +2951,7 @@ impl GlobalStreamManager {
         Ok(true)
     }
 
+    /// Handles notification of worker node activation and deletion, and triggers parallelism control.
     async fn run(&self, mut shutdown_rx: Receiver<()>) {
         tracing::info!("starting automatic parallelism control monitor");
 
