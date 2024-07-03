@@ -669,7 +669,10 @@ impl TableUnsyncData {
     }
 
     fn ack_synced(&mut self, sync_epoch: HummockEpoch) {
-        let min_sync_epoch = self.syncing_epochs.pop_back().expect("should exist");
+        let min_sync_epoch = self
+            .syncing_epochs
+            .pop_back()
+            .expect(&format!("should exist: {:?}", self.table_id));
         assert_eq!(sync_epoch, min_sync_epoch);
         self.max_synced_epoch = Some(sync_epoch);
     }
