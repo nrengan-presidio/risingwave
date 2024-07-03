@@ -672,7 +672,7 @@ impl TableUnsyncData {
         let min_sync_epoch = self
             .syncing_epochs
             .pop_back()
-            .expect(&format!("should exist: {:?}", self.table_id));
+            .unwrap_or_else(|| panic!("should exist: {:?}", self.table_id));
         assert_eq!(sync_epoch, min_sync_epoch);
         self.max_synced_epoch = Some(sync_epoch);
     }
