@@ -167,7 +167,7 @@ public class DbzSourceUtils {
     private static ObjectName getStreamingMetricsObjectName(
             String connector, String server, String context) throws MalformedObjectNameException {
         if (Objects.equals(connector, "sql_server")) {
-            // WKXTODO: fulfill the task id here
+            // TODO: fulfill the task id here, by WKX
             return new ObjectName(
                     "debezium."
                             + connector

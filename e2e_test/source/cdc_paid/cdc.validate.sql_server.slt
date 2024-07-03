@@ -1,6 +1,7 @@
 # CDC Postgres source validate test
 control substitution on
 
+# TODO(kexiang): add more tests here
 # invalid username
 # invalid password
 # invalid table name

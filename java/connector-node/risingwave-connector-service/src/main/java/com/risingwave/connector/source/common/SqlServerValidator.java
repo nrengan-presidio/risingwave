@@ -93,7 +93,7 @@ public class SqlServerValidator extends DatabaseValidator implements AutoCloseab
             try (var stmt =
                     jdbcConnection.prepareStatement(
                             ValidatorUtils.getSql("sqlserver.sql.agent.enabled"))) {
-                // check whether sql server agent is enabled. It's necessary to get
+                // check whether sql server agent is enabled. It's required to run
                 // fn_cdc_get_max_lsn
                 var res = stmt.executeQuery();
                 while (res.next()) {
@@ -264,6 +264,7 @@ public class SqlServerValidator extends DatabaseValidator implements AutoCloseab
     }
 
     private boolean isDataTypeCompatible(String ssDataType, Data.DataType.TypeName typeName) {
+        // TODO: add more data type compatibility check, by WKX
         int val = typeName.getNumber();
         switch (ssDataType) {
             case "bit":

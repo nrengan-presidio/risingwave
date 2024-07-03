@@ -62,7 +62,8 @@ impl postgres_types::ToSql for ScalarImpl {
     }
 }
 
-/// |Rust type|Server type|
+/// The following table shows the mapping between Rust types and Sql Server types in tiberius.
+/// |Rust type|Sql Server type|
 /// |--------|--------|
 /// |`u8`|`tinyint`|
 /// |`i16`|`smallint`|

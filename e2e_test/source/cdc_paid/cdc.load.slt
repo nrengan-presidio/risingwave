@@ -1,6 +1,7 @@
 # CDC source basic test
 control substitution on
 
+# TODO(kexiang): add more tests here
 # Some columns missing and reordered (sql-server-cdc)
 
 statement ok
