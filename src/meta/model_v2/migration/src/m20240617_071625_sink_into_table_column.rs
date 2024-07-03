@@ -1,5 +1,7 @@
 use sea_orm_migration::prelude::{Table as MigrationTable, *};
 
+use crate::SubQueryStatement::SelectStatement;
+
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
@@ -13,7 +15,32 @@ impl MigrationTrait for Migration {
                     .add_column(ColumnDef::new(Sink::OriginalTargetColumns).binary())
                     .to_owned(),
             )
-            .await
+            .await?;
+
+        let stmt = Query::update()
+            .table(Sink::Table)
+            .value(
+                Sink::OriginalTargetColumns,
+                SimpleExpr::SubQuery(
+                    None,
+                    Box::new(SelectStatement(
+                        Query::select()
+                            .column((Table::Table, Table::Columns))
+                            .from(Table::Table)
+                            .and_where(
+                                Expr::col((Table::Table, Table::TableId))
+                                    .equals((Sink::Table, Sink::TargetTable)),
+                            )
+                            .to_owned(),
+                    )),
+                ),
+            )
+            .and_where(Expr::col((Sink::Table, Sink::TargetTable)).is_not_null())
+            .to_owned();
+
+        manager.exec_stmt(stmt).await?;
+
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
@@ -31,5 +58,13 @@ impl MigrationTrait for Migration {
 #[derive(DeriveIden)]
 enum Sink {
     Table,
+    TargetTable,
     OriginalTargetColumns,
+}
+
+#[derive(DeriveIden)]
+enum Table {
+    Table,
+    TableId,
+    Columns,
 }
