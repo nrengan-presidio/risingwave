@@ -622,6 +622,9 @@ struct TableUnsyncData {
 
 impl TableUnsyncData {
     fn new(table_id: TableId, committed_epoch: Option<HummockEpoch>) -> Self {
+        if table_id.table_id == 823 {
+            error!("table 823 initialized");
+        }
         Self {
             table_id,
             instance_data: Default::default(),
@@ -646,6 +649,9 @@ impl TableUnsyncData {
         if let Some(prev_epoch) = self.max_sync_epoch() {
             assert_gt!(epoch, prev_epoch)
         }
+        if self.table_id.table_id == 823 {
+            error!(epoch, "table 823 add syncing epoch");
+        }
         self.syncing_epochs.push_front(epoch);
         (
             self.instance_data
@@ -669,6 +675,9 @@ impl TableUnsyncData {
     }
 
     fn ack_synced(&mut self, sync_epoch: HummockEpoch) {
+        if self.table_id.table_id == 823 {
+            error!(sync_epoch, "table 823 ack synced");
+        }
         let min_sync_epoch = self
             .syncing_epochs
             .pop_back()
@@ -1203,6 +1212,9 @@ impl HummockUploader {
             return;
         };
         if let Some(removed_table_data) = data.unsync_data.may_destroy_instance(instance_id) {
+            if removed_table_data.table_id.table_id == 823 {
+                error!(syncing_epochs = ?removed_table_data.syncing_epochs, "table 823 dropped");
+            }
             data.task_manager.remove_table_spill_tasks(
                 removed_table_data.table_id,
                 removed_table_data
