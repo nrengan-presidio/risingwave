@@ -26,6 +26,7 @@ use risingwave_pb::catalog::table::{OptionalAssociatedSourceId, PbTableType, PbT
 use risingwave_pb::catalog::{PbCreateType, PbStreamJobStatus, PbTable};
 use risingwave_pb::plan_common::column_desc::GeneratedOrDefaultColumn;
 use risingwave_pb::plan_common::DefaultColumnDesc;
+use tracing::error;
 
 use super::{ColumnId, DatabaseId, FragmentId, OwnedByUserCatalog, SchemaId, SinkId};
 use crate::error::{ErrorCode, RwError};
@@ -528,6 +529,10 @@ impl From<PbTable> for TableCatalog {
         let mut watermark_columns = FixedBitSet::with_capacity(columns.len());
         for idx in &tb.watermark_indices {
             watermark_columns.insert(*idx as _);
+        }
+
+        if id == 823 {
+            error!(name, desc = ?tb.description, "table 823");
         }
 
         Self {
