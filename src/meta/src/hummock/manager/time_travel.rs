@@ -14,8 +14,8 @@ use risingwave_pb::hummock::{PbHummockVersion, PbHummockVersionDelta, PbSstableI
 use sea_orm::sea_query::OnConflict;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
-    ColumnTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, TransactionTrait,
+    ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    TransactionTrait,
 };
 
 use crate::controller::SqlMetaStore;
@@ -238,19 +238,6 @@ impl HummockManager {
                 )))
             })?;
         let expected_version_id = epoch_to_version.version_id;
-
-        let qualified_version_count = hummock_time_travel_delta::Entity::find()
-            .filter(hummock_time_travel_delta::Column::VersionId.gte(expected_version_id))
-            .count(&sql_store.conn)
-            .await?;
-        if qualified_version_count == 0 {
-            // TODO: As time travel archive is taken asynchronously in `create_version_checkpoint`, a very recent epoch may not have its archive available yet.
-            // This can be fixed by reading version and deltas that are not checkpoint yet.
-            return Err(Error::TimeTravel(anyhow!(format!(
-                "qualified version is not ready yet for epoch {}, version {}",
-                query_epoch, expected_version_id,
-            ))));
-        }
 
         let replay_version = hummock_time_travel_version::Entity::find()
             .filter(hummock_time_travel_version::Column::VersionId.lte(expected_version_id))
