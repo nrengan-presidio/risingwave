@@ -26,7 +26,7 @@ use itertools::Itertools;
 use rand::seq::{IteratorRandom, SliceRandom};
 use rand::{thread_rng, Rng};
 use risingwave_common::catalog::TableId;
-use risingwave_common::hash::{ParallelUnitId, WorkerSlotId};
+use risingwave_common::hash::WorkerSlotId;
 use risingwave_pb::meta::table_fragments::fragment::FragmentDistributionType;
 use risingwave_pb::meta::table_fragments::PbFragment;
 use risingwave_pb::meta::update_worker_node_schedulability_request::Schedulability;
